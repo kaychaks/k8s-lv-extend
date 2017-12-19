@@ -1,0 +1,15 @@
+---
+strategies:
+  -
+    mount : "/var"
+    lvName: "lvvar"
+    size : "25G"
+  -
+    mount : "/var/log"
+    lvName: "lvvarlog"
+    size : "25G"
+  -
+    mount : "/mnt/data"
+    lvName: "lvmntdata"
+    size : "250G"
+...

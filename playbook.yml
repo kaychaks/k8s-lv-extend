@@ -1,0 +1,71 @@
+---
+- hosts: storage:master:others
+  become: yes
+  become_method: sudo
+
+  tasks:
+    - name: ensure the pv {{ pvName }} exist
+      shell: pvs -o pv_name | uniq | grep {{ pvName }} | tr -s " "
+      register: pv
+      changed_when: false
+      failed_when: pv.stdout == ""
+
+    - name: ensure the pv {{ pvName }} is part of vg
+      shell: pvs -o pv_name,vg_name --separator "|" | uniq | grep {{ pvName }} | cut -d '|' -f 2
+      register: vg
+      changed_when: false
+      failed_when: vg.stdout != vgName
+
+    - name: ensure that there is free space to create lvs for the pv
+      shell: pvs /dev/sdb -o lv_name --segments --noheadings | wc -l
+      register: lvnill
+      changed_when: false
+      failed_when: lvnill.stdout >= 1
+      ignore_errors: true
+
+    - name: create or extend lv with size (final size in case of extend)
+      with_items: "{{ strategies }}"
+      lvol:
+        vg: "{{ vgName }}"
+        lv: "{{ item.lvName }}"
+        size: "{{ item.size }}"
+        shrink: no
+      when: lvnill | succeeded
+
+    - name: ensure that fs need resize to match lv (redundant check)
+      shell: |
+        fssize=`((df -h {{ item.mount }} --output=size  | tail -n 1 | tr -d ' ' | tr [:upper:] [:lower:]) || echo "0g") 2>/dev/null`
+        lvsize=`lvs {{ vgName }}/{{ item.lvName }} -o lv_size --no-headings | tr -d ' '`
+        if [ "$fssize" == "$lvsize" ]; then
+          echo "$fssize--matched--$lvsize"
+          exit 1
+        else
+          echo "$fssize--not-matched--$lvsize"
+          exit 0
+        fi
+      args:
+        executable: /bin/bash
+      register: resizereq
+      with_items: "{{ strategies }}"
+      changed_when: false
+
+    - name: resizing fs
+      when: resizereq | succeeded
+      block:
+        - name: create / extend fs
+          with_items: "{{ strategies }}"
+          filesystem:
+            fstype: ext4
+            dev: "/dev/{{ vgName }}/{{ item.lvName }}"
+            resizefs: yes
+
+      always:
+        - name: mounting fs
+          with_items: "{{ strategies }}"
+          mount:
+            path: "{{ item.mount }}"
+            src: "/dev/{{ vgName }}/{{ item.lvName }}"
+            fstype: ext4
+            state: mounted
+
+...
