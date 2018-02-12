@@ -3,9 +3,9 @@ strategies:
   -
     mount : "/var"
     lvName: "lvvar"
-    size : "250G"
+    size : "252G"
   -
     mount : "/var/log"
     lvName: "lvvarlog"
-    size : "50G"
+    size : "51G"
 ...

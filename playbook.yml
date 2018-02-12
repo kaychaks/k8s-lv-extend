@@ -20,7 +20,7 @@
       shell: pvs /dev/sdb -o lv_name --segments --noheadings | wc -l
       register: lvnill
       changed_when: false
-      failed_when: lvnill.stdout >= 1
+      failed_when: (lvnill.stdout | int) > 1
       ignore_errors: true
 
     - name: create or extend lv with size (final size in case of extend)
